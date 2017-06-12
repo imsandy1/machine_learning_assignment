@@ -1,0 +1,90 @@
+---
+title: "Prediction_Assignment"
+author: "Sandeep Muttha"
+date: "June 4, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, tidy = TRUE, cache = TRUE)
+```
+
+# Load libraries and download data
+
+```{r}
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(rpart.plot)
+set.seed(0)
+
+
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "trainingdata.csv")
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "testdata.csv")
+
+
+traindata <- read.csv("trainingdata.csv", na.strings = c("NA", "", "#DIV/0!"))
+testdata <- read.csv("testdata.csv", na.strings = c("NA", "", "#DIV/0!"))
+data <- traindata
+```
+
+# Processing Data
+Read data to see complete cases, and identify the columns to be used for training the models.
+``` {r}
+table(complete.cases(data)) # Complete cases in training data
+sum(colSums(is.na(data))==0) #Columns where all rows are populated
+table(sapply(data, function(x) sum(!is.na(x))))
+```
+
+Except for the 60 columns where all rows are populated, the remaining columns are very sparsely populated (<3%). So we will drop all such variables for our analysis 
+Drop columns where any of the rows are NA
+Drop columns that are not metrics "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"              
+
+``` {r}
+data <- data[,colSums(is.na(data))==0]
+data <- data[,-1:-7]
+
+index <- createDataPartition(data$classe, p = 0.8, list = FALSE)
+train <- data[index,]
+test <- data[-index,]
+```
+
+
+# Building the models
+We will build three different models (Random Forests, Decision Trees, Bagging) to predict the classe variable. We will use k-fold cross validation while training the model using trainconrol method as "cv" and number of folds as 5.
+
+## Random Forests
+``` {r}
+model1 <- train(classe ~ ., data = train, method = "rf", trControl = trainControl(method = "cv", number = 5))
+predicted_classe1 <- predict(model1, test)
+confusionMatrix(predicted_classe1, test$classe)
+```
+
+## Trees
+``` {r}
+model2 <- rpart(classe ~ ., data = train, method = "class")
+predicted_classe2 <- predict(model2, test)
+predicted_classe2 <- colnames(predicted_classe2)[apply(predicted_classe2,1,which.max)]
+confusionMatrix(predicted_classe2, test$classe)
+rpart.plot(model2)
+```
+
+## Bagging
+``` {r}
+model3 <- train(classe ~ ., data = train, method = "treebag", trControl = trainControl(method = "cv", number = 5))
+predicted_classe3 <- predict(model3, test)
+confusionMatrix(predicted_classe3, test$classe)
+```
+
+# Conclusion
+The Random Forest model performed best with 99.26% accuracy. And the out of sample error was 1-accuracy = 0.74%.
+
+#Quiz
+Predict the classe for the 20 cases in the testset.
+``` {r}
+testdata1 <- testdata[,colSums(is.na(data))==0]
+testdata1 <- testdata1[,-1:-7]
+predict(model1, testdata1)
+```
